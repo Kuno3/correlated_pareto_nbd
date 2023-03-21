@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from scipy.stats import norm, multivariate_normal, truncexpon, invwishart, expon, matrix_normal
+from scipy.stats import multivariate_normal, invwishart, matrix_normal
 import numba
 from tqdm import tqdm
 

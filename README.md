@@ -1,0 +1,2 @@
+# correlated_pareto_nbd
+Correlated_Pareto_NBD

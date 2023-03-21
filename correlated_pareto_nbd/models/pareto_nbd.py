@@ -1,10 +1,8 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+from scipy.stats import norm, multivariate_normal, truncexpon, invwishart, expon, matrix_normal
 import numba
 from tqdm import tqdm
-
-from scipy.stats import norm, multivariate_normal, truncexpon, invwishart, expon, matrix_normal
 
 class pareto_nbd():
     def __init__(self, T, t, x, features, Lambda0=None, nu0=None, V0=None):

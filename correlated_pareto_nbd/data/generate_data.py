@@ -6,6 +6,15 @@ from scipy.stats import multivariate_normal, expon
 class pareto_nbd_simulator():
 
     def __init__(self, N, T=None, dim=3, features=None, B=None, Gamma=None):
+        """
+        N: number of data
+        T: measurement period from first purchase
+        dim: dimesion of features
+        features: features
+        B: coefficient of features
+        Gamma: covariance of rho and mu
+        """
+
         self.N = N
 
         if T is None:
@@ -29,6 +38,13 @@ class pareto_nbd_simulator():
             self.Gamma = Gamma
 
     def simulate(self):
+        """
+        rho: expectation of purchase frequency
+        mu: expectation of (1 / time to leave)
+        x: (Number of purchases) - 1
+        t: elapsed period from first purchase to last purchase
+        """
+                
         mean_log_rho_mu = self.features.dot(self.B)
         log_rho_mu = np.array([multivariate_normal(mean_log_rho_mu[i, :], self.Gamma).rvs() for i in range(self.N)]) # type: ignore
         self.rho = np.exp(log_rho_mu[:, 0])

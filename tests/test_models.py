@@ -10,5 +10,5 @@ if __name__ == '__main__':
         simulator.t,
         simulator.x,
         simulator.features)
-    model.fit()
+    model.fit(thinning = 10)
     print(model.B_samples.mean(axis=0))

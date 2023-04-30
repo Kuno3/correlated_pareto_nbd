@@ -102,14 +102,14 @@ class pareto_nbd():
                     rho_new = np.exp(log_rho_mu_new[:, 0])
                     mu_new = np.exp(log_rho_mu_new[:, 1])
 
-                r_new = epsilon/2 * (
+                r -= epsilon/2 * (
                         np.vstack([
                             pareto_nbd.E_delta_rho(rho_new, mu_new, self.T, self.t, self.x),
                             pareto_nbd.E_delta_mu(rho_new, mu_new, self.T, self.t, self.x)
                         ]) + np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T)).T
                 H_new =  pareto_nbd.E(rho_new, mu_new, self.T, self.t, self.x)\
                     + ((log_rho_mu_new-mean_log_rho_mu) * np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T).T).sum(axis=1) / 2\
-                    + (r_new**2).sum(axis=1) / 2
+                    + (r**2).sum(axis=1) / 2
 
                 threshold = np.log(np.random.rand(self.N))
                 accept = (threshold < H_old-H_new).astype(float)

@@ -1,10 +1,10 @@
 import numpy as np
 import pandas as pd
-from scipy.stats import multivariate_normal, invwishart, matrix_normal
+from scipy.stats import multivariate_normal, invwishart, matrix_normal, expon
 import numba
 from tqdm import tqdm
 
-class pareto_nbd():
+class pareto_nbd_efficient_sampler():
     def __init__(self, T, t, x, features, Lambda0=None, nu0=None, V0=None):
         """
         T: measurement period from first purchase
@@ -37,21 +37,20 @@ class pareto_nbd():
 
     @staticmethod
     @numba.jit
-    def E_delta_rho(rho, mu, T, t, x):
-        recency = T - t
-        return - x + rho / (rho+mu) + rho * t - rho * (1-rho*recency) * np.exp(-(rho+mu)*recency) / (mu+rho*np.exp(-(rho+mu)*recency))
+    def E(rho, mu, tau, T, x):
+        min_T_tau = np.array([min(T[i], tau[i]) for i in range(len(T))])
+        return - x * (np.log(rho) + np.log(min_T_tau)) + rho * min_T_tau - np.log(mu) + mu*tau
     
     @staticmethod
     @numba.jit
-    def E_delta_mu(rho, mu, T, t, x):
-        recency = T - t
-        return mu * (T + 1 / (rho+mu) - (1 + mu * recency) / (mu+rho*np.exp(-(rho+mu)*recency)))
-
+    def E_delta_rho(rho, tau, T, x):
+        min_T_tau = np.array([min(T[i], tau[i]) for i in range(len(T))])
+        return - x / rho + min_T_tau
+    
     @staticmethod
     @numba.jit
-    def E(rho, mu, T, t, x):
-        recency = T - t
-        return - x * np.log(rho) + np.log(rho+mu) + (rho+mu) * t - np.log(mu+rho*np.exp(-(rho+mu)*recency))
+    def E_delta_mu(mu, tau):
+        return - 1 / mu + tau
     
     def fit(self, num_sample=1000, L=100, epsilon=0.001, thinning=1):
         """
@@ -63,6 +62,7 @@ class pareto_nbd():
 
         rho_list = []
         mu_list = []
+        tau_list = []
         B_list = []
         Gamma_list = []
         lp_list = []
@@ -70,6 +70,7 @@ class pareto_nbd():
         log_rho_mu = np.random.randn(self.N, 2)
         rho = np.exp(log_rho_mu[:, 0])
         mu = np.exp(log_rho_mu[:, 1])
+        tau = (self.T - self.t) / 2 + self.t
         B = np.zeros((self.dim, 2))
         Gamma = np.eye(2, dtype=float)
 
@@ -79,14 +80,14 @@ class pareto_nbd():
                 r = np.random.randn(self.N, 2)
 
                 mean_log_rho_mu = self.features.dot(B)
-                H_old = pareto_nbd.E(rho, mu, self.T, self.t, self.x) \
+                H_old = pareto_nbd_efficient_sampler.E(rho, mu, tau, self.T, self.x) \
                     + ((log_rho_mu-mean_log_rho_mu) * np.linalg.solve(Gamma, (log_rho_mu-mean_log_rho_mu).T).T).sum(axis=1) / 2 \
                     + (r**2).sum(axis=1) / 2
 
                 r -= epsilon/2 * (
                     np.vstack([
-                        pareto_nbd.E_delta_rho(rho, mu, self.T, self.t, self.x),
-                        pareto_nbd.E_delta_mu(rho, mu, self.T, self.t, self.x)
+                        pareto_nbd_efficient_sampler.E_delta_rho(rho, tau, self.T, self.x),
+                        pareto_nbd_efficient_sampler.E_delta_mu(mu, tau)
                     ]) + np.linalg.solve(Gamma, (log_rho_mu-mean_log_rho_mu).T)).T
                 log_rho_mu_new = log_rho_mu + epsilon * r
                 rho_new = np.exp(log_rho_mu_new[:, 0])
@@ -95,8 +96,8 @@ class pareto_nbd():
                 for _ in range(L-1):
                     r -= epsilon * (
                         np.vstack([
-                            pareto_nbd.E_delta_rho(rho_new, mu_new, self.T, self.t, self.x),
-                            pareto_nbd.E_delta_mu(rho_new, mu_new, self.T, self.t, self.x)
+                            pareto_nbd_efficient_sampler.E_delta_rho(rho_new, tau, self.T, self.x),
+                            pareto_nbd_efficient_sampler.E_delta_mu(mu_new, tau)
                         ]) + np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T)).T
                     log_rho_mu_new = log_rho_mu_new + epsilon * r
                     rho_new = np.exp(log_rho_mu_new[:, 0])
@@ -104,10 +105,10 @@ class pareto_nbd():
 
                 r -= epsilon/2 * (
                         np.vstack([
-                            pareto_nbd.E_delta_rho(rho_new, mu_new, self.T, self.t, self.x),
-                            pareto_nbd.E_delta_mu(rho_new, mu_new, self.T, self.t, self.x)
+                            pareto_nbd_efficient_sampler.E_delta_rho(rho_new, tau, self.T, self.x),
+                            pareto_nbd_efficient_sampler.E_delta_mu(mu_new, tau)
                         ]) + np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T)).T
-                H_new =  pareto_nbd.E(rho_new, mu_new, self.T, self.t, self.x)\
+                H_new =  pareto_nbd_efficient_sampler.E(rho_new, mu_new, tau, self.T, self.x)\
                     + ((log_rho_mu_new-mean_log_rho_mu) * np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T).T).sum(axis=1) / 2\
                     + (r**2).sum(axis=1) / 2
 
@@ -117,6 +118,12 @@ class pareto_nbd():
                 log_rho_mu[:, 1] = np.nan_to_num(accept * log_rho_mu_new[:, 1]) + (1-accept) * log_rho_mu[:, 1]
                 rho = np.exp(log_rho_mu[:, 0])
                 mu = np.exp(log_rho_mu[:, 1])
+
+                # tauのサンプリング
+                tau_prop = expon(scale=1/mu).rvs() + self.t
+                threshold = np.log(np.random.rand(self.N))
+                accept = (threshold < - rho * ([min(self.T[i], tau_prop[i]) for i in range(len(self.T))] - self.t))
+                tau = accept * tau_prop + (1-accept) * tau
 
                 # BとGammaのサンプリング
                 # 参考：https://en.wikipedia.org/wiki/Bayesian_multivariate_linear_regression
@@ -130,7 +137,7 @@ class pareto_nbd():
                 B = matrix_normal(mean=B_n.T, rowcov=Gamma, colcov=np.linalg.solve(Lambda_n, np.eye(3))).rvs().T # type: ignore
 
             mean_log_rho_mu = self.features.dot(B)
-            lp = - pareto_nbd.E(rho, mu, self.T, self.t, self.x).sum()
+            lp = - pareto_nbd_efficient_sampler.E(rho, mu, tau, self.T, self.x).sum()
             lp += - ((log_rho_mu-mean_log_rho_mu) * np.linalg.solve(Gamma, (log_rho_mu-mean_log_rho_mu).T).T).sum() / 2 - self.N * np.log(np.linalg.det(Gamma)) / 2
             lp += multivariate_normal(np.zeros(6), cov=np.kron(Gamma, np.linalg.inv(self.Lambda0))).logpdf(B.T.flatten()) # type: ignore
             lp += invwishart(3, scale=self.V0).logpdf(Gamma)
@@ -138,12 +145,14 @@ class pareto_nbd():
             # リストへの格納
             rho_list.append(rho)
             mu_list.append(mu)
+            tau_list.append(tau)
             B_list.append(B.copy())
             Gamma_list.append(Gamma.copy())
             lp_list.append(lp)
 
         self.rho_samples = np.array(rho_list)
         self.mu_samples = np.array(mu_list)
+        self.tau_samples = np.array(tau_list)
         self.B_samples = np.array(B_list)
         self.Gamma_samples = np.array(Gamma_list)
         self.lp = np.array(lp_list)

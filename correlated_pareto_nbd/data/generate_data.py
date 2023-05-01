@@ -5,7 +5,7 @@ from scipy.stats import multivariate_normal, expon
 
 class pareto_nbd_simulator():
 
-    def __init__(self, N, T=None, dim=3, features=None, B=None, Gamma=None):
+    def __init__(self, N, T=None, dim=3, features=None, B=None, Gamma=None, seed=1234):
         """
         N: number of data
         T: measurement period from first purchase
@@ -14,6 +14,8 @@ class pareto_nbd_simulator():
         B: coefficient of features
         Gamma: covariance of rho and mu
         """
+
+        np.random.seed(seed)
 
         self.N = N
 

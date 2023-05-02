@@ -38,13 +38,13 @@ class pareto_nbd_efficient_sampler():
     @staticmethod
     @numba.jit
     def E(rho, mu, tau, T, x):
-        min_T_tau = np.array([min(T[i], tau[i]) for i in range(len(T))])
-        return - x * (np.log(rho) + np.log(min_T_tau)) + rho * min_T_tau - np.log(mu) + mu*tau
+        min_T_tau = np.minimum(T, tau)
+        return - x * np.log(rho) + rho * min_T_tau - np.log(mu) + mu*tau
     
     @staticmethod
     @numba.jit
     def E_delta_rho(rho, tau, T, x):
-        min_T_tau = np.array([min(T[i], tau[i]) for i in range(len(T))])
+        min_T_tau = np.minimum(T, tau)
         return - x / rho + min_T_tau
     
     @staticmethod
@@ -88,26 +88,26 @@ class pareto_nbd_efficient_sampler():
                     np.vstack([
                         pareto_nbd_efficient_sampler.E_delta_rho(rho, tau, self.T, self.x),
                         pareto_nbd_efficient_sampler.E_delta_mu(mu, tau)
-                    ]) + np.linalg.solve(Gamma, (log_rho_mu-mean_log_rho_mu).T)).T
-                log_rho_mu_new = log_rho_mu + epsilon * r
-                rho_new = np.exp(log_rho_mu_new[:, 0])
-                mu_new = np.exp(log_rho_mu_new[:, 1])
+                    ]) + np.linalg.solve(Gamma, (log_rho_mu-mean_log_rho_mu).T) / np.exp(log_rho_mu).T).T
+                rho_new = rho + epsilon * r[:, 0]
+                mu_new = mu + epsilon * r[:, 1]
+                log_rho_mu_new = np.log(np.array([rho_new, mu_new]).T)
 
                 for _ in range(L-1):
                     r -= epsilon * (
                         np.vstack([
                             pareto_nbd_efficient_sampler.E_delta_rho(rho_new, tau, self.T, self.x),
                             pareto_nbd_efficient_sampler.E_delta_mu(mu_new, tau)
-                        ]) + np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T)).T
-                    log_rho_mu_new = log_rho_mu_new + epsilon * r
-                    rho_new = np.exp(log_rho_mu_new[:, 0])
-                    mu_new = np.exp(log_rho_mu_new[:, 1])
+                        ]) + np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T) / np.exp(log_rho_mu_new).T).T
+                    rho_new = rho_new + epsilon * r[:, 0]
+                    mu_new = mu_new + epsilon * r[:, 1]
+                    log_rho_mu_new = np.log(np.array([rho_new, mu_new]).T)
 
                 r -= epsilon/2 * (
                         np.vstack([
                             pareto_nbd_efficient_sampler.E_delta_rho(rho_new, tau, self.T, self.x),
                             pareto_nbd_efficient_sampler.E_delta_mu(mu_new, tau)
-                        ]) + np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T)).T
+                        ]) + np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T) / np.exp(log_rho_mu_new).T).T
                 H_new =  pareto_nbd_efficient_sampler.E(rho_new, mu_new, tau, self.T, self.x)\
                     + ((log_rho_mu_new-mean_log_rho_mu) * np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T).T).sum(axis=1) / 2\
                     + (r**2).sum(axis=1) / 2
@@ -122,7 +122,7 @@ class pareto_nbd_efficient_sampler():
                 # tauのサンプリング
                 tau_prop = expon(scale=1/mu).rvs() + self.t
                 threshold = np.log(np.random.rand(self.N))
-                accept = (threshold < - rho * ([min(self.T[i], tau_prop[i]) for i in range(len(self.T))] - self.t))
+                accept = (threshold < - rho * (np.minimum(self.T, tau_prop) - np.minimum(self.T, tau))).astype(float)
                 tau = accept * tau_prop + (1-accept) * tau
 
                 # BとGammaのサンプリング
@@ -139,6 +139,7 @@ class pareto_nbd_efficient_sampler():
             mean_log_rho_mu = self.features.dot(B)
             lp = - pareto_nbd_efficient_sampler.E(rho, mu, tau, self.T, self.x).sum()
             lp += - ((log_rho_mu-mean_log_rho_mu) * np.linalg.solve(Gamma, (log_rho_mu-mean_log_rho_mu).T).T).sum() / 2 - self.N * np.log(np.linalg.det(Gamma)) / 2
+            lp += expon(scale=1/mu).logpdf(tau).sum()
             lp += multivariate_normal(np.zeros(6), cov=np.kron(Gamma, np.linalg.inv(self.Lambda0))).logpdf(B.T.flatten()) # type: ignore
             lp += invwishart(3, scale=self.V0).logpdf(Gamma)
 

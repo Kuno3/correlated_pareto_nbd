@@ -26,7 +26,7 @@ class pareto_nbd_efficient_sampler():
             self.Lambda0 = Lambda0
 
         if nu0 is None:
-            self.nu0 = self.dim - 1
+            self.nu0 = 2
         else:
             self.nu0 = nu0
 
@@ -85,29 +85,29 @@ class pareto_nbd_efficient_sampler():
                     + (r**2).sum(axis=1) / 2
 
                 r -= epsilon/2 * (
-                    np.vstack([
+                    np.exp(log_rho_mu).T * np.vstack([
                         pareto_nbd_efficient_sampler.E_delta_rho(rho, tau, self.T, self.x),
                         pareto_nbd_efficient_sampler.E_delta_mu(mu, tau)
-                    ]) + np.linalg.solve(Gamma, (log_rho_mu-mean_log_rho_mu).T) / np.exp(log_rho_mu).T).T
-                rho_new = rho + epsilon * r[:, 0]
-                mu_new = mu + epsilon * r[:, 1]
-                log_rho_mu_new = np.log(np.array([rho_new, mu_new]).T)
+                    ]) + np.linalg.solve(Gamma, (log_rho_mu-mean_log_rho_mu).T)).T
+                log_rho_mu_new = log_rho_mu + epsilon * r
+                rho_new = np.exp(log_rho_mu_new[:, 0])
+                mu_new = np.exp(log_rho_mu_new[:, 1])
 
                 for _ in range(L-1):
                     r -= epsilon * (
-                        np.vstack([
+                        np.exp(log_rho_mu).T * np.vstack([
                             pareto_nbd_efficient_sampler.E_delta_rho(rho_new, tau, self.T, self.x),
                             pareto_nbd_efficient_sampler.E_delta_mu(mu_new, tau)
-                        ]) + np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T) / np.exp(log_rho_mu_new).T).T
-                    rho_new = rho_new + epsilon * r[:, 0]
-                    mu_new = mu_new + epsilon * r[:, 1]
-                    log_rho_mu_new = np.log(np.array([rho_new, mu_new]).T)
+                        ]) + np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T)).T
+                    log_rho_mu_new = log_rho_mu_new + epsilon * r
+                    rho_new = np.exp(log_rho_mu_new[:, 0])
+                    mu_new = np.exp(log_rho_mu_new[:, 1])
 
-                r -= epsilon/2 * (
-                        np.vstack([
-                            pareto_nbd_efficient_sampler.E_delta_rho(rho_new, tau, self.T, self.x),
-                            pareto_nbd_efficient_sampler.E_delta_mu(mu_new, tau)
-                        ]) + np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T) / np.exp(log_rho_mu_new).T).T
+                r -= epsilon / 2 * (
+                    np.exp(log_rho_mu).T * np.vstack([
+                        pareto_nbd_efficient_sampler.E_delta_rho(rho_new, tau, self.T, self.x),
+                        pareto_nbd_efficient_sampler.E_delta_mu(mu_new, tau)
+                    ]) + np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T)).T
                 H_new =  pareto_nbd_efficient_sampler.E(rho_new, mu_new, tau, self.T, self.x)\
                     + ((log_rho_mu_new-mean_log_rho_mu) * np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T).T).sum(axis=1) / 2\
                     + (r**2).sum(axis=1) / 2
@@ -141,7 +141,7 @@ class pareto_nbd_efficient_sampler():
             lp += - ((log_rho_mu-mean_log_rho_mu) * np.linalg.solve(Gamma, (log_rho_mu-mean_log_rho_mu).T).T).sum() / 2 - self.N * np.log(np.linalg.det(Gamma)) / 2
             lp += expon(scale=1/mu).logpdf(tau).sum()
             lp += multivariate_normal(np.zeros(6), cov=np.kron(Gamma, np.linalg.inv(self.Lambda0))).logpdf(B.T.flatten()) # type: ignore
-            lp += invwishart(3, scale=self.V0).logpdf(Gamma)
+            lp += invwishart(self.nu0, scale=self.V0).logpdf(Gamma)
 
             # リストへの格納
             rho_list.append(rho)

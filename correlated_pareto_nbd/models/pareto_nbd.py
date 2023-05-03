@@ -84,29 +84,29 @@ class pareto_nbd():
                     + (r**2).sum(axis=1) / 2
 
                 r -= epsilon/2 * (
-                    np.vstack([
+                    np.exp(log_rho_mu).T * np.vstack([
                         pareto_nbd.E_delta_rho(rho, mu, self.T, self.t, self.x),
                         pareto_nbd.E_delta_mu(rho, mu, self.T, self.t, self.x)
-                    ]) + np.linalg.solve(Gamma, (log_rho_mu-mean_log_rho_mu).T) / np.exp(log_rho_mu).T).T
-                rho_new = rho + epsilon * r[:, 0]
-                mu_new = mu + epsilon * r[:, 1]
-                log_rho_mu_new = np.log(np.array([rho_new, mu_new]).T)
+                    ]) + np.linalg.solve(Gamma, (log_rho_mu-mean_log_rho_mu).T)).T
+                log_rho_mu_new = log_rho_mu + epsilon * r
+                rho_new = np.exp(log_rho_mu_new[:, 0])
+                mu_new = np.exp(log_rho_mu_new[:, 1])
 
                 for _ in range(L-1):
                     r -= epsilon * (
-                        np.vstack([
+                        np.exp(log_rho_mu_new).T * np.vstack([
                             pareto_nbd.E_delta_rho(rho_new, mu_new, self.T, self.t, self.x),
                             pareto_nbd.E_delta_mu(rho_new, mu_new, self.T, self.t, self.x)
-                        ]) + np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T) / np.exp(log_rho_mu_new).T).T
-                    rho_new = rho_new + epsilon * r[:, 0]
-                    mu_new = mu_new + epsilon * r[:, 1]
-                    log_rho_mu_new = np.log(np.array([rho_new, mu_new]).T)
+                        ]) + np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T)).T
+                    log_rho_mu_new = log_rho_mu + epsilon * r
+                    rho_new = np.exp(log_rho_mu_new[:, 0])
+                    mu_new = np.exp(log_rho_mu_new[:, 1])
 
                 r -= epsilon/2 * (
-                        np.vstack([
+                        np.exp(log_rho_mu_new).T * np.vstack([
                             pareto_nbd.E_delta_rho(rho_new, mu_new, self.T, self.t, self.x),
                             pareto_nbd.E_delta_mu(rho_new, mu_new, self.T, self.t, self.x)
-                        ]) + np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T) / np.exp(log_rho_mu_new).T).T
+                        ]) + np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T)).T
                 H_new =  pareto_nbd.E(rho_new, mu_new, self.T, self.t, self.x)\
                     + ((log_rho_mu_new-mean_log_rho_mu) * np.linalg.solve(Gamma, (log_rho_mu_new-mean_log_rho_mu).T).T).sum(axis=1) / 2\
                     + (r**2).sum(axis=1) / 2

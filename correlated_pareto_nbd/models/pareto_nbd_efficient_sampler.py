@@ -134,13 +134,13 @@ class pareto_nbd_efficient_sampler():
                 V_n = self.V0 + (log_rho_mu - self.features.dot(B_n)).T.dot(log_rho_mu - self.features.dot(B_n)) + B_n.T.dot(self.Lambda0).dot(B_n)
 
                 Gamma = invwishart(nu_n, scale=V_n).rvs()
-                B = matrix_normal(mean=B_n.T, rowcov=Gamma, colcov=np.linalg.solve(Lambda_n, np.eye(3))).rvs().T # type: ignore
+                B = matrix_normal(mean=B_n.T, rowcov=Gamma, colcov=np.linalg.solve(Lambda_n, np.eye(len(Lambda_n)))).rvs().T # type: ignore
 
             mean_log_rho_mu = self.features.dot(B)
             lp = - pareto_nbd_efficient_sampler.E(rho, mu, tau, self.T, self.x).sum()
             lp += - ((log_rho_mu-mean_log_rho_mu) * np.linalg.solve(Gamma, (log_rho_mu-mean_log_rho_mu).T).T).sum() / 2 - self.N * np.log(np.linalg.det(Gamma)) / 2
             lp += expon(scale=1/mu).logpdf(tau).sum()
-            lp += multivariate_normal(np.zeros(6), cov=np.kron(Gamma, np.linalg.inv(self.Lambda0))).logpdf(B.T.flatten()) # type: ignore
+            lp += multivariate_normal(np.zeros(len(B.T.flatten())), cov=np.kron(Gamma, np.linalg.inv(self.Lambda0))).logpdf(B.T.flatten()) # type: ignore
             lp += invwishart(self.nu0, scale=self.V0).logpdf(Gamma)
 
             # リストへの格納
